@@ -1,0 +1,98 @@
+# ============================================================
+# 视频推理系统配置
+# 所有项都可以用环境变量覆盖，见 vfs/config.py 里的 _ENV_MAP
+# ============================================================
+
+server:
+  host: 127.0.0.1
+  port: 8000
+  # 上传文件最大字节数（默认 512MB）
+  max_upload_bytes: 536870912
+
+# ---------- 视觉语言模型 ----------
+# provider 可选: mock | openai | ollama
+vlm:
+  provider: mock
+  # OpenAI 兼容接口：OpenAI / 通义千问 DashScope 兼容模式 / 智谱 / Moonshot / 硅基流动 / vLLM / LM Studio 均可用
+  base_url: https://api.openai.com/v1
+  api_key: ""
+  model: gpt-4o-mini
+  # 单帧最大边长（越大越准、越慢越贵）
+  max_image_side: 1280
+  jpeg_quality: 85
+  temperature: 0.1
+  timeout_s: 120
+  # 每帧送入模型的图片数量上限（取关键帧）
+  max_frames: 12
+  # 是否做跨帧综合（第二次调用）
+  synthesize: true
+
+# Ollama 示例（provider: ollama）
+# vlm:
+#   provider: ollama
+#   base_url: http://127.0.0.1:11434
+#   model: qwen2.5vl:7b
+
+# ---------- 抽帧 ----------
+frames:
+  max_frames: 24          # 最多保留关键帧
+  min_gap_s: 0.35         # 关键帧最小时间间隔
+  scene_threshold: 0.32   # 场景变化阈值(0~1)，越小越敏感
+  uniform_ratio: 0.35     # 均匀补帧占比(防止长镜头只有一个视角)
+  blur_reject: 28.0       # 拉普拉斯方差低于此值视为糊帧
+
+# ---------- 联网检索 ----------
+retrieval:
+  enabled: true
+  timeout_s: 12
+  cache_dir: data/cache
+  cache_ttl_s: 86400
+  # 通用网页搜索后端: auto | google | bing | duckduckgo | tavily | brave | serper | sogou | baidu
+  search_backend: auto
+  # 区域策略（关键）：
+  #   overseas_first  境外优先，逐个探测可达性，不通的自动跳过，最后兜底国内（推荐）
+  #   domestic_first  国内优先，境外作为备选
+  #   overseas_only / domestic_only  只用单一区域
+  region_strategy: overseas_first
+  max_search_results: 5
+  # 可达性探测缓存秒数。被墙域名解析可能卡很久，缓存能避免每次分析都重探
+  health_ttl_s: 600
+  dns_timeout_s: 3.0
+  # 需要 key 的后端从环境变量读：TAVILY_API_KEY / BRAVE_API_KEY / SERPER_API_KEY
+  user_agent: "VideoForensics/1.0 (+research)"
+
+# ---------- Google ----------
+google:
+  # Programmable Search（真谷歌搜索）：需要 key + cx 两者配对
+  #   key: https://console.cloud.google.com/apis/credentials
+  #   cx:  https://programmablesearchengine.google.com/
+  # 只填其中一个不生效；都不填时自动使用免 key 的 Google News RSS
+  api_key: ""
+  cx: ""
+  # Google Maps：地理编码 + 静态地图。同一把 key 需另开 Geocoding / Maps Static API
+  maps_api_key: ""
+  maps_enabled: true
+  map_zoom: 13
+  # 没配 key 时是否允许用免 key 替代（Google News RSS / OpenStreetMap）
+  allow_keyless: true
+
+# ---------- OCR ----------
+ocr:
+  enabled: true
+  # auto 时会尝试系统 tesseract；找不到就静默跳过
+  langs: "chi_sim+eng"
+  min_confidence: 45
+
+# ---------- 推理 ----------
+reasoning:
+  # 低于该置信度的结论会被标注为"推测"
+  low_confidence: 0.35
+  # 单条假设最多保留候选数
+  max_candidates: 5
+  # 是否允许模型在答案里直言"信息不足"
+  allow_abstain: true
+
+paths:
+  data_dir: data
+  uploads_dir: data/uploads
+  outputs_dir: data/outputs

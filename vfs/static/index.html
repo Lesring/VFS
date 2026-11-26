@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>视频取证推理系统</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#121823; --panel2:#161e2b; --line:#233047;
+    --fg:#e6edf7; --dim:#8fa3bf; --accent:#4ea1ff; --ok:#3ddc97; --warn:#ffc857; --bad:#ff6b6b;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  header{padding:22px 28px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header h1{margin:0;font-size:19px;letter-spacing:.2px}
+  header .tag{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:99px;padding:2px 10px}
+  main{display:grid;grid-template-columns:minmax(360px,420px) 1fr;gap:0;min-height:calc(100vh - 68px)}
+  @media(max-width:960px){main{grid-template-columns:1fr}}
+  .left{padding:22px;border-right:1px solid var(--line)}
+  .right{padding:22px;overflow-y:auto;max-height:calc(100vh - 68px)}
+  @media(max-width:960px){.right{max-height:none}}
+
+  .drop{border:1.5px dashed var(--line);border-radius:12px;padding:26px 18px;text-align:center;cursor:pointer;
+        transition:.15s;background:var(--panel)}
+  .drop:hover,.drop.over{border-color:var(--accent);background:var(--panel2)}
+  .drop b{display:block;margin-bottom:6px}
+  .drop small{color:var(--dim)}
+  .fileinfo{margin-top:10px;font:12px/1.5 var(--mono);color:var(--ok);word-break:break-all}
+
+  label{display:block;margin:16px 0 6px;font-size:13px;color:var(--dim)}
+  textarea,input[type=text],select{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--fg);
+        border-radius:9px;padding:10px 12px;font:inherit;resize:vertical;outline:none}
+  textarea:focus,input:focus,select:focus{border-color:var(--accent)}
+  textarea{min-height:64px}
+  .row{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+  .row label{margin:0;display:flex;align-items:center;gap:6px;color:var(--fg);font-size:13px}
+  button{background:var(--accent);color:#04101f;border:0;border-radius:9px;padding:11px 20px;font-weight:650;
+         cursor:pointer;font-size:14px;transition:.15s}
+  button:hover:not(:disabled){filter:brightness(1.1)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .examples{margin-top:14px;display:flex;flex-wrap:wrap;gap:7px}
+  .chip{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:99px;padding:4px 11px;
+        cursor:pointer;background:transparent}
+  .chip:hover{color:var(--accent);border-color:var(--accent)}
+
+  .status{margin-top:18px;font:12.5px/1.7 var(--mono);color:var(--dim);max-height:220px;overflow-y:auto;
+          background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:10px 12px;display:none}
+  .status.show{display:block}
+  .status .s{white-space:pre-wrap}
+  .status .s b{color:var(--accent)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+  .card h3{margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);font-weight:600}
+  .answer{font-size:15.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word}
+  .answer strong{color:var(--accent)}
+  .conf{display:inline-flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12.5px;color:var(--dim)}
+  .bar{width:130px;height:6px;border-radius:99px;background:#1e2a3d;overflow:hidden}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,#4ea1ff,#3ddc97)}
+
+  .frames{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+  .fr{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:#000;aspect-ratio:16/10}
+  .fr img{width:100%;height:100%;object-fit:cover;display:block}
+  .fr span{position:absolute;left:0;bottom:0;right:0;font:11px/1.4 var(--mono);padding:3px 6px;
+           background:linear-gradient(180deg,transparent,rgba(0,0,0,.85));color:#cfe0f7}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--dim);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:7px 8px;border-bottom:1px solid #1a2333;vertical-align:top}
+  td.v{color:var(--fg)}
+  .b-k{font:11px/1 var(--mono);padding:2px 6px;border-radius:5px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+  .k-vlm{border-color:#2c5a8f;color:#8cc4ff}
+  .k-ocr{border-color:#6a5a2c;color:#ffd98c}
+  .k-knowledge{border-color:#2c6a4a;color:#8cf0c0}
+  .k-web{border-color:#5a2c6a;color:#d7a2ff}
+  .k-heuristic{border-color:#3a4457;color:#9fb0c9}
+  .k-user{border-color:#6a2c3a;color:#ff9fb0}
+  .k-metadata{border-color:#3a4457;color:#9fb0c9}
+  .score{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+
+  .trace{font:12.5px/1.75 var(--mono);color:#b9c9de;white-space:pre-wrap;max-height:340px;overflow-y:auto}
+  .warn{color:var(--warn);font-size:12.5px}
+  .empty{color:var(--dim);text-align:center;padding:60px 20px;font-size:14px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+  .kv i{color:var(--dim);font-style:normal}
+  .spinner{display:inline-block;width:11px;height:11px;border:2px solid #2b3a52;border-top-color:var(--accent);
+           border-radius:50%;animation:sp .7s linear infinite;vertical-align:-1px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .srcs{display:flex;flex-wrap:wrap;gap:6px;font-size:11.5px;color:var(--dim);margin-top:8px}
+  .srcs em{font-style:normal;font-family:var(--mono);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+
+  /* ---- 配置面板 ---- */
+  .modal{position:fixed;inset:0;background:rgba(4,7,12,.78);display:none;z-index:100;
+         align-items:flex-start;justify-content:center;overflow-y:auto;padding:34px 16px}
+  .modal.show{display:flex}
+  .sheet{width:min(880px,100%);background:var(--bg);border:1px solid var(--line);border-radius:14px;
+         box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  .sheet header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;
+                align-items:center;position:sticky;top:0;background:var(--bg);z-index:2;border-radius:14px 14px 0 0}
+  .sheet header h2{margin:0;font-size:16px;font-weight:650}
+  .sheet .body{padding:8px 24px 24px}
+  .sheet .foot{padding:16px 24px;border-top:1px solid var(--line);display:flex;gap:10px;align-items:center;
+               justify-content:flex-end;position:sticky;bottom:0;background:var(--bg)}
+  .grp{margin-top:22px}
+  .grp > h4{margin:0 0 12px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--accent);
+            border-bottom:1px solid var(--line);padding-bottom:7px}
+  .fld{margin-bottom:14px}
+  .fld > label{margin:0 0 5px;color:var(--fg);font-size:13px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .fld .hint{font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.5}
+  .fld input[type=text],.fld input[type=password],.fld input[type=number],.fld select{font-size:13px;padding:8px 11px}
+  .badge{font-size:10.5px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--dim);
+         font-family:var(--mono)}
+  .badge.on{border-color:#2c6a4a;color:var(--ok)}
+  .sw{position:relative;display:inline-block;width:38px;height:21px;flex:0 0 auto}
+  .sw input{opacity:0;width:0;height:0}
+  .sw span{position:absolute;inset:0;background:#26313f;border-radius:99px;cursor:pointer;transition:.2s}
+  .sw span:before{content:"";position:absolute;width:15px;height:15px;left:3px;top:3px;background:#8fa3bf;
+                  border-radius:50%;transition:.2s}
+  .sw input:checked + span{background:#1d4b7a}
+  .sw input:checked + span:before{transform:translateX(17px);background:var(--accent)}
+
+  .hgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px}
+  .hitem{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:11.5px;background:var(--panel)}
+  .hitem b{display:block;font-size:12px;margin-bottom:3px;font-family:var(--mono)}
+  .hitem .ok{color:var(--ok)} .hitem .no{color:var(--bad)}
+  .hitem small{color:var(--dim);font-family:var(--mono);font-size:10.5px;word-break:break-all}
+
+  .mapwrap{border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#0a0f16;
+           max-width:640px}
+  .mapwrap img{width:100%;display:block;aspect-ratio:1/1;object-fit:cover}
+  .mapmeta{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--dim);margin-top:8px;
+           flex-wrap:wrap;align-items:center}
+  .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:#16233a;border:1px solid var(--line);
+         color:var(--fg);padding:11px 20px;border-radius:10px;font-size:13px;z-index:200;display:none;
+         box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  .toast.show{display:block}
+</style>
+</head>
+<body>
+<header>
+  <h1>视频取证推理系统</h1>
+  <span class="tag" id="envTag">加载中…</span>
+  <span class="tag" id="regionTag">数据源：检测中…</span>
+  <span class="tag">抽帧 → 视觉判读 → OCR → 联网核实 → 证据融合</span>
+  <button id="openCfg" style="margin-left:auto;background:transparent;border:1px solid var(--line);
+          color:var(--dim);padding:7px 15px;font-size:13px">⚙ 配置</button>
+</header>
+
+<div class="modal" id="cfgModal">
+  <div class="sheet">
+    <header>
+      <h2>配置</h2>
+      <button id="closeCfg" style="background:transparent;border:1px solid var(--line);color:var(--dim);
+              padding:6px 13px;font-size:13px">关闭</button>
+    </header>
+    <div class="body" id="cfgBody">
+      <div class="empty" style="padding:30px 0"><span class="spinner"></span>读取配置…</div>
+    </div>
+    <div class="foot">
+      <span id="cfgMsg" style="font-size:12.5px;color:var(--dim);margin-right:auto"></span>
+      <button id="refreshHealth" style="background:transparent;border:1px solid var(--line);color:var(--dim)">
+        重新探测数据源
+      </button>
+      <button id="saveCfg">保存并生效</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<main>
+  <section class="left">
+    <div class="drop" id="drop">
+      <b>拖入视频，或点击选择文件</b>
+      <small>MP4 / MOV / MKV / AVI / WEBM，也支持单张图片</small>
+      <div class="fileinfo" id="fileinfo"></div>
+    </div>
+    <input type="file" id="file" accept="video/*,image/*" hidden />
+
+    <label for="q">你要问什么？</label>
+    <textarea id="q" placeholder="例：这架飞机的目的地是哪里？"></textarea>
+    <div class="examples" id="examples"></div>
+
+    <label for="hints">补充背景（可选，会作为可信提示参与推理）</label>
+    <input type="text" id="hints" placeholder="例：2024 年 5 月拍摄于上海浦东，白天" />
+
+    <div class="row">
+      <label><input type="checkbox" id="online" checked /> 联网核实</label>
+      <label>帧数
+        <select id="frames" style="width:auto;padding:5px 8px">
+          <option value="">自动</option>
+          <option value="8">8</option>
+          <option value="16">16</option>
+          <option value="32">32</option>
+        </select>
+      </label>
+    </div>
+    <div class="row" style="margin-top:18px">
+      <button id="go" disabled>开始分析</button>
+      <button id="demo" style="background:transparent;border:1px solid var(--line);color:var(--dim)">
+        用内置样例试跑
+      </button>
+    </div>
+
+    <div class="status" id="status"></div>
+  </section>
+
+  <section class="right" id="right">
+    <div class="empty">上传视频并提问，分析过程与结论会显示在这里。</div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const EXAMPLES = [
+  "这架飞机的目的地是哪里？",
+  "这是什么机型、哪家航空公司？",
+  "这个视频是在哪个机场拍的？",
+  "画面里能看出什么时间拍的？",
+  "尽可能多地告诉我这段视频里的信息",
+];
+
+let selectedFile = null;
+let currentJob = null;
+
+// ---------- 初始化 ----------
+(async () => {
+  try {
+    const c = await (await fetch("/api/config")).json();
+    $("#envTag").textContent = `视觉模型：${c.vlm_provider} / ${c.vlm_model}　检索：${c.search_backend}`;
+  } catch { $("#envTag").textContent = "配置读取失败"; }
+  const box = $("#examples");
+  EXAMPLES.forEach(t => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = t;
+    b.onclick = () => { $("#q").value = t; };
+    box.appendChild(b);
+  });
+  // 后台探测一次数据源，让头部状态标签反映真实降级情况
+  loadHealth();
+})();
+
+// ---------- 选择文件 ----------
+const drop = $("#drop"), fileInput = $("#file");
+drop.onclick = () => fileInput.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => {
+  e.preventDefault(); drop.classList.remove("over");
+  if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+};
+fileInput.onchange = () => { if (fileInput.files.length) setFile(fileInput.files[0]); };
+
+function setFile(f) {
+  selectedFile = f;
+  const mb = (f.size / 1048576).toFixed(1);
+  $("#fileinfo").textContent = `${f.name}　${mb} MB`;
+  $("#go").disabled = false;
+}
+
+// ---------- 提交 ----------
+$("#go").onclick = async () => {
+  if (!selectedFile) return;
+  $("#go").disabled = true;
+  $("#status").classList.add("show");
+  $("#status").innerHTML = '<div class="s"><span class="spinner"></span>上传中…</div>';
+  $("#right").innerHTML = '<div class="empty"><span class="spinner"></span>正在分析，请稍候…</div>';
+
+  const fd = new FormData();
+  fd.append("file", selectedFile);
+  fd.append("question", $("#q").value.trim());
+  fd.append("hints", $("#hints").value.trim());
+  fd.append("online", $("#online").checked ? "true" : "false");
+  const mf = $("#frames").value;
+  if (mf) fd.append("max_frames", mf);
+
+  try {
+    const r = await fetch("/api/analyze", { method: "POST", body: fd });
+    if (!r.ok) throw new Error((await r.json()).detail || `HTTP ${r.status}`);
+    const j = await r.json();
+    currentJob = j.job_id;
+    listen(j.job_id);
+  } catch (e) {
+    $("#right").innerHTML = `<div class="card"><div class="warn">提交失败：${e.message}</div></div>`;
+    $("#go").disabled = false;
+  }
+};
+
+$("#demo").onclick = async () => {
+  $("#go").disabled = true;
+  $("#demo").disabled = true;
+  $("#status").classList.add("show");
+  $("#status").innerHTML = '<div class="s"><span class="spinner"></span>启动样例分析…</div>';
+  $("#right").innerHTML = '<div class="empty"><span class="spinner"></span>正在分析样例视频…</div>';
+  const fd = new FormData();
+  fd.append("question", $("#q").value.trim() || "这架飞机的目的地是哪里？");
+  fd.append("online", $("#online").checked ? "true" : "false");
+  try {
+    const r = await fetch("/api/demo", { method: "POST", body: fd });
+    if (!r.ok) throw new Error((await r.json()).detail || `HTTP ${r.status}`);
+    const j = await r.json();
+    currentJob = j.job_id;
+    listen(j.job_id);
+  } catch (e) {
+    $("#right").innerHTML = `<div class="card"><div class="warn">${escapeHtml(e.message)}</div></div>`;
+    $("#go").disabled = false;
+  } finally {
+    $("#demo").disabled = false;
+  }
+};
+
+function listen(jobId) {
+  $("#status").innerHTML = "";
+  const es = new EventSource(`/api/jobs/${jobId}/stream`);
+  es.onmessage = ev => {
+    if (ev.data === "[DONE]") { es.close(); return; }
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    const line = document.createElement("div");
+    line.className = "s";
+    line.innerHTML = `<b>[${m.stage}]</b> ${escapeHtml(m.message)}`;
+    $("#status").appendChild(line);
+    $("#status").scrollTop = 1e9;
+    if (m.stage === "done") { es.close(); loadResult(jobId); }
+    if (m.stage === "error") {
+      es.close();
+      $("#right").innerHTML = `<div class="card"><div class="warn">分析失败：${escapeHtml(m.message)}</div></div>`;
+      $("#go").disabled = false;
+    }
+  };
+  es.onerror = () => { es.close(); loadResult(jobId); };
+}
+
+// ---------- 渲染结果 ----------
+async function loadResult(jobId) {
+  try {
+    const r = await fetch(`/api/jobs/${jobId}/result`);
+    if (!r.ok) throw new Error(`结果未就绪 (${r.status})`);
+    render(await r.json());
+  } catch (e) {
+    $("#right").innerHTML = `<div class="card"><div class="warn">${escapeHtml(e.message)}</div></div>`;
+  } finally {
+    $("#go").disabled = false;
+  }
+}
+
+function render(d) {
+  const conf = Math.round((d.answer_confidence || 0) * 100);
+  const html = [];
+
+  html.push(`<div class="card">
+    <h3>结论</h3>
+    <div class="conf">置信度 ${conf}%（${escapeHtml(d.answer_confidence_label || "-")}）
+      <span class="bar"><i style="width:${conf}%"></i></span>
+      ${d.intent && d.intent.primary_label ? `　问题意图：${escapeHtml(d.intent.primary_label)}` : ""}
+    </div>
+    <div class="answer">${mdLite(d.answer || "")}</div>
+  </div>`);
+
+  const v = d.video || {};
+  html.push(`<div class="card"><h3>视频信息</h3>
+    <div class="kv">
+      <i>文件</i><span>${escapeHtml(v.filename || "-")}</span>
+      <i>时长</i><span>${(v.duration_s || 0).toFixed(2)} s</span>
+      <i>分辨率</i><span>${v.width || 0} × ${v.height || 0}</span>
+      <i>帧率 / 编码</i><span>${v.fps || 0} fps　${escapeHtml(v.codec || "-")}</span>
+      <i>关键帧</i><span>${(d.frames || []).length} 个</span>
+      <i>证据条目</i><span>${(d.evidence || []).length} 条</span>
+    </div>
+  </div>`);
+
+  if (d.map && (d.map.static_url || d.map.link)) {
+    const m = d.map;
+    const providerName = m.provider === "google_maps" ? "Google Maps"
+      : m.provider === "openstreetmap" ? "OpenStreetMap" : "地图链接";
+    const img = m.static_url
+      ? `<div class="mapwrap"><img src="${escapeHtml(m.static_url)}" alt="地图" referrerpolicy="no-referrer"
+             onerror="this.parentNode.innerHTML='<div style=&quot;padding:26px;text-align:center;color:#8fa3bf;font-size:13px&quot;>静态地图加载失败，可用下方链接打开</div>'"></div>`
+      : "";
+    html.push(`<div class="card"><h3>位置地图</h3>${img}
+      <div class="mapmeta">
+        <span>${escapeHtml(m.label || "")}${m.address ? "　·　" + escapeHtml(m.address) : ""}</span>
+        <span>
+          ${m.lat != null ? `<span class="badge">${m.lat.toFixed(4)}, ${m.lon.toFixed(4)}</span>` : ""}
+          <span class="badge">${escapeHtml(providerName)}</span>
+          ${m.link ? `<a href="${escapeHtml(m.link)}" target="_blank" style="color:#8cc4ff;margin-left:8px">打开地图</a>` : ""}
+        </span>
+      </div>
+      ${m.note ? `<div class="hint" style="font-size:11.5px;color:#8fa3bf;margin-top:6px">${escapeHtml(m.note)}</div>` : ""}
+    </div>`);
+  }
+
+  if (d.frames && d.frames.length) {
+    const cards = d.frames.map(f => `
+      <a class="fr" href="/api/frames/${d.job_id}/${encodeURIComponent(f.path.split(/[\\/]/).pop())}" target="_blank" title="${escapeHtml(f.reason || "")}">
+        <img loading="lazy" src="/api/frames/${d.job_id}/${encodeURIComponent(f.path.split(/[\\/]/).pop())}" alt="">
+        <span>${f.timestamp_s.toFixed(2)}s</span>
+      </a>`).join("");
+    html.push(`<div class="card"><h3>关键帧</h3><div class="frames">${cards}</div></div>`);
+  }
+
+  const slots = Object.values(d.slots || {}).filter(s => s.candidates && s.candidates.length);
+  if (slots.length) {
+    const rows = slots.map(s => {
+      const c = s.candidates[0];
+      const alts = s.candidates.slice(1, 3).map(x => `${escapeHtml(x.value)} <span class="score">${Math.round(x.score*100)}%</span>`).join("　");
+      return `<tr>
+        <td>${escapeHtml(s.label)}</td>
+        <td class="v">${escapeHtml(c.value)}</td>
+        <td class="score">${Math.round(c.score*100)}%</td>
+        <td class="score">${alts || "—"}</td>
+      </tr>`;
+    }).join("");
+    html.push(`<div class="card"><h3>识别结果</h3>
+      <table><thead><tr><th>类型</th><th>判定</th><th>置信</th><th>其他候选</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`);
+  }
+
+  if (d.evidence && d.evidence.length) {
+    const rows = d.evidence.slice(0, 120).map(e => `<tr>
+      <td><span class="b-k k-${e.kind}">${escapeHtml(e.kind)}</span></td>
+      <td>${escapeHtml(e.slot || "-")}</td>
+      <td class="v">${escapeHtml(trunc(e.value || e.claim, 110))}</td>
+      <td class="score">${(e.confidence ?? 0).toFixed(2)}</td>
+      <td class="score">${escapeHtml(e.source || "")}</td>
+      <td class="score">${e.timestamp_s != null ? e.timestamp_s.toFixed(1) + "s" : ""}</td>
+    </tr>`).join("");
+    html.push(`<div class="card"><h3>证据表</h3>
+      <table><thead><tr><th>类型</th><th>槽位</th><th>内容</th><th>置信</th><th>来源</th><th>时间</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`);
+  }
+
+  if (d.knowledge && d.knowledge.length) {
+    const rows = d.knowledge.slice(0, 20).map(k => `<tr>
+      <td class="score">${escapeHtml(k.source || "")}</td>
+      <td>${k.url ? `<a href="${escapeHtml(k.url)}" target="_blank" style="color:#8cc4ff">${escapeHtml(trunc(k.title,80))}</a>` : escapeHtml(trunc(k.title,80))}</td>
+      <td class="score">${escapeHtml(trunc(k.snippet, 160))}</td>
+    </tr>`).join("");
+    html.push(`<div class="card"><h3>联网佐证</h3>
+      <table><thead><tr><th>来源</th><th>条目</th><th>摘要</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+  }
+
+  if (d.searches && d.searches.length) {
+    const items = d.searches.map(s => `<div style="margin-bottom:8px">
+      <div style="font-size:12.5px;color:#8fa3bf">查询：<span style="font-family:var(--mono);color:#cfe0f7">${escapeHtml(s.query)}</span>
+        <span class="score">　命中 ${s.n}　尝试 ${(s.attempted||[]).join("/")}</span></div>
+    </div>`).join("");
+    html.push(`<div class="card"><h3>检索记录</h3>${items}</div>`);
+  }
+
+  if (d.reasoning_trace && d.reasoning_trace.length) {
+    html.push(`<div class="card"><h3>推理链</h3><div class="trace">${escapeHtml(d.reasoning_trace.map((t,i)=>`${i+1}. ${t}`).join("\n"))}</div></div>`);
+  }
+
+  if (d.warnings && d.warnings.length) {
+    html.push(`<div class="card"><h3>限制与告警</h3>${d.warnings.map(w=>`<div class="warn">• ${escapeHtml(w)}</div>`).join("")}</div>`);
+  }
+
+  if (d.timeline && d.timeline.length) {
+    const t = d.timeline.map(s => `${escapeHtml(s.stage)} ${s.ms}ms`).join("　·　");
+    html.push(`<div class="card"><h3>耗时</h3><div class="score" style="font-size:12.5px">${t}</div></div>`);
+  }
+
+  $("#right").innerHTML = html.join("");
+  $("#right").scrollTop = 0;
+}
+
+// ---------- 配置面板 ----------
+const cfgModal = $("#cfgModal");
+let cfgFields = [];
+
+$("#openCfg").onclick = () => { cfgModal.classList.add("show"); loadSettings(); };
+$("#closeCfg").onclick = () => cfgModal.classList.remove("show");
+cfgModal.onclick = e => { if (e.target === cfgModal) cfgModal.classList.remove("show"); };
+document.addEventListener("keydown", e => { if (e.key === "Escape") cfgModal.classList.remove("show"); });
+
+function toast(msg, ms = 2600) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+const GROUPS = ["模型", "检索", "Google", "其他"];
+
+async function loadSettings() {
+  const body = $("#cfgBody");
+  body.innerHTML = '<div class="empty" style="padding:30px 0"><span class="spinner"></span>读取配置…</div>';
+  try {
+    const r = await fetch("/api/settings");
+    const d = await r.json();
+    cfgFields = d.fields || [];
+    renderSettings(d);
+  } catch (e) {
+    body.innerHTML = `<div class="warn">读取失败：${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderSettings(d) {
+  const body = $("#cfgBody");
+  const parts = [];
+
+  // 顶部状态
+  const st = d.status || {};
+  parts.push(`<div class="grp"><h4>当前状态</h4>
+    <div class="hitem" style="display:flex;justify-content:space-between;align-items:center;padding:11px 13px">
+      <span>视觉模型：<b style="font-family:var(--mono)">${escapeHtml(st.vlm_active || "-")}</b></span>
+      <span class="${st.vlm_ready ? "ok" : "no"}">${st.vlm_ready ? "已就绪" : "未配置（仅 OCR + 图像统计）"}</span>
+    </div>
+    <div class="hitem" style="margin-top:8px;padding:11px 13px">
+      <span>区域策略：<b style="font-family:var(--mono)">${escapeHtml(st.region_strategy || "-")}</b></span>
+    </div>
+    <div style="font-size:11.5px;color:var(--dim);margin-top:8px;line-height:1.6">
+      数据源可达性（境外优先，不可达会自动降级国内）：
+    </div>
+    <div class="hgrid" id="healthGrid"><span class="spinner"></span></div>
+  </div>`);
+
+  for (const g of GROUPS) {
+    const fields = cfgFields.filter(f => f.group === g);
+    if (!fields.length) continue;
+    parts.push(`<div class="grp"><h4>${escapeHtml(g)}</h4>${fields.map(fieldHtml).join("")}</div>`);
+  }
+
+  body.innerHTML = parts.join("");
+  loadHealth();
+}
+
+function fieldHtml(f) {
+  const id = `f_${f.key.replace(/\./g, "_")}`;
+  let input = "";
+  if (f.type === "select") {
+    const opts = (f.options || []).map(o =>
+      `<option value="${escapeHtml(o)}" ${o === f.value ? "selected" : ""}>${escapeHtml(o)}</option>`
+    ).join("");
+    input = `<select id="${id}" data-key="${escapeHtml(f.key)}">${opts}</select>`;
+  } else if (f.type === "bool") {
+    input = `<label class="sw"><input type="checkbox" id="${id}" data-key="${escapeHtml(f.key)}"
+              ${f.value ? "checked" : ""}><span></span></label>`;
+  } else if (f.type === "number") {
+    input = `<input type="number" id="${id}" data-key="${escapeHtml(f.key)}"
+              value="${f.value ?? ""}" ${f.min != null ? `min="${f.min}"` : ""}
+              ${f.max != null ? `max="${f.max}"` : ""} ${f.step != null ? `step="${f.step}"` : ""}>`;
+  } else if (f.type === "password") {
+    input = `<input type="password" id="${id}" data-key="${escapeHtml(f.key)}" autocomplete="off"
+              placeholder="${f.configured ? escapeHtml(f.masked || "已配置，留空则不修改") : "未配置"}">`;
+  } else {
+    input = `<input type="text" id="${id}" data-key="${escapeHtml(f.key)}"
+              value="${escapeHtml(f.value ?? "")}" placeholder="${escapeHtml(f.placeholder || "")}">`;
+  }
+
+  const badge = f.type === "password" && f.configured
+    ? '<span class="badge on">已配置</span>' : "";
+
+  return `<div class="fld">
+    <label for="${id}">${escapeHtml(f.label)} ${badge}</label>
+    ${input}
+    ${f.help ? `<div class="hint">${escapeHtml(f.help)}</div>` : ""}
+  </div>`;
+}
+
+async function loadHealth(force = false) {
+  const grid = $("#healthGrid");
+  if (!grid) return;
+  try {
+    const r = await fetch(`/api/health/sources${force ? "?force=true" : ""}`);
+    const d = await r.json();
+    const srcs = d.sources || {};
+    const order = d.ordered || [];
+    const items = Object.entries(srcs).map(([name, s]) => {
+      const ok = s.ok;
+      const used = order.includes(name);
+      return `<div class="hitem" title="${escapeHtml(s.host || name)}">
+        <b>${escapeHtml(name)}</b>
+        <span class="${ok ? "ok" : "no"}">${ok ? "可达" : "不可达"}</span>${used ? ' <span class="badge">选用</span>' : ""}
+        <br><small>${escapeHtml(s.detail || "")}</small>
+      </div>`;
+    }).join("");
+    grid.innerHTML = items || '<small style="color:var(--dim)">无数据</small>';
+    const degraded = d.degraded;
+    $("#regionTag").textContent = degraded
+      ? `数据源：境外不可达，已降级国内（${d.strategy}）`
+      : `数据源：境外可用（${d.strategy}）`;
+  } catch (e) {
+    grid.innerHTML = `<small style="color:var(--warn)">探测失败：${escapeHtml(e.message)}</small>`;
+  }
+}
+
+$("#refreshHealth").onclick = async () => {
+  $("#cfgMsg").textContent = "重新探测中…";
+  await loadHealth(true);
+  $("#cfgMsg").textContent = "";
+  toast("数据源探测已刷新");
+};
+
+$("#saveCfg").onclick = async () => {
+  const payload = {};
+  document.querySelectorAll("#cfgBody [data-key]").forEach(el => {
+    const key = el.dataset.key;
+    if (el.type === "checkbox") payload[key] = el.checked;
+    else if (el.type === "number") payload[key] = el.value === "" ? undefined : Number(el.value);
+    else payload[key] = el.value;
+  });
+  // 去掉 undefined，避免把空数字写成 null
+  Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+  $("#cfgMsg").textContent = "保存中…";
+  try {
+    const r = await fetch("/api/settings", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    $("#cfgMsg").textContent = `已生效：${d.vlm_active}`;
+    toast(`配置已保存并生效（模型：${d.vlm_active}）`, 3200);
+    await loadSettings();
+    refreshEnvTag();
+  } catch (e) {
+    $("#cfgMsg").textContent = `保存失败：${e.message}`;
+    toast("保存失败：" + e.message, 3600);
+  }
+};
+
+async function refreshEnvTag() {
+  try {
+    const c = await (await fetch("/api/config")).json();
+    $("#envTag").textContent = `视觉模型：${c.vlm_provider} / ${c.vlm_model}　检索：${c.search_backend}`;
+  } catch {}
+  loadHealth();
+}
+
+// ---------- 小工具 ----------
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function trunc(s, n) { s = String(s ?? ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+function mdLite(s) {
+  let out = escapeHtml(s);
+  out = out.replace(/^### (.*)$/gm, '<b>$1</b>');
+  out = out.replace(/^## (.*)$/gm, '<b>$1</b>');
+  out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/^- (.*)$/gm, '　• $1');
+  out = out.replace(/(https?:\/\/[^\s）)]+)/g, '<a href="$1" target="_blank" style="color:#8cc4ff">$1</a>');
+  return out;
+}
+</script>
+</body>
+</html>
